@@ -7,10 +7,11 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 mod handlers;
 mod models;
 mod repositories;
+mod services;
 mod translate;
 
-use handlers::user_handlers::{get_word_pairs, make_user};
-use handlers::word_pair_handlers::add_word_pair;
+use handlers::user_handlers::make_user;
+use handlers::word_pair_handlers::{add_word_pair, get_word_pairs};
 
 #[derive(Clone)]
 struct AppState {

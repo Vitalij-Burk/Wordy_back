@@ -7,7 +7,7 @@ pub struct CreateUser {
     pub name: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::FromRow)]
 pub struct User {
     pub id: i32,
 

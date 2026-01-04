@@ -8,7 +8,7 @@ pub struct CreateWordPair {
     pub source_language: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, sqlx::FromRow)]
 pub struct WordPair {
     pub id: i32,
     pub user_id: i32,

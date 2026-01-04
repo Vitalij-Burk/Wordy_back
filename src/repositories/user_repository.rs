@@ -1,19 +1,25 @@
-use crate::models::user::User;
+use crate::{models::user::User, repositories::repository::Repository};
 use sqlx::{Error, postgres::PgPool};
 
 pub struct UserRepository {
     pub db: PgPool,
 }
 
-impl UserRepository {
-    pub async fn save_user(&self, user: User) -> Result<(), Error> {
-        sqlx::query("INSERT INTO users (id, key, name) VALUES ($1, $2, $3)")
-            .bind(user.id)
-            .bind(user.key)
-            .bind(user.name)
-            .execute(&self.db)
-            .await?;
+impl Repository for UserRepository {
+    type Item = User;
+    type Error = Error;
 
-        Ok(())
+    async fn insert(&self, user: &User) -> Result<User, Error> {
+        let db_user = sqlx::query_as!(
+            User,
+            "INSERT INTO users (id, key, name) VALUES ($1, $2, $3) RETURNING *",
+            &user.id,
+            &user.key,
+            &user.name
+        )
+        .fetch_one(&self.db)
+        .await?;
+
+        Ok(db_user)
     }
 }

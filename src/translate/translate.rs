@@ -1,25 +1,28 @@
-use crate::models::word_pair::WordPair;
 use translators::{GoogleTranslator, Translator};
 
 pub async fn translate_text(
-    user_id: &i32,
     source_text: &str,
     source_language: &str,
     target_language: &str,
-) -> Result<WordPair, Box<dyn std::error::Error>> {
+) -> Result<String, translators::Error> {
     let google_translator = GoogleTranslator::default();
 
     let target_text = google_translator
         .translate_async(source_text, source_language, target_language)
         .await?;
 
-    let word_pair = WordPair::new(
-        user_id,
-        &target_text,
-        source_text,
-        target_language,
-        source_language,
-    );
+    Ok(target_text)
+}
 
-    Ok(word_pair)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_translate_text() {
+        assert_eq!(
+            translate_text("Hello", "en", "de").await,
+            Ok("Hallo".to_string())
+        );
+    }
 }

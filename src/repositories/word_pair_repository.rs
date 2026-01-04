@@ -1,46 +1,46 @@
-use crate::models::word_pair::WordPair;
-use sqlx::{Error, Row, postgres::PgPool};
+use crate::{models::word_pair::WordPair, repositories::repository::Repository};
+use sqlx::{Error, postgres::PgPool};
+
+pub trait IWordPairRepository: Repository<Item = WordPair, Error = sqlx::Error> {
+    async fn select_by_user_id(&self, user_id: &i32) -> Result<Vec<Self::Item>, Self::Error>;
+}
 
 pub struct WordPairRepository {
     pub db: PgPool,
 }
 
-impl WordPairRepository {
-    pub async fn save_word_pair(&self, word_pair: WordPair) -> Result<(), Error> {
-        sqlx::query(
-            "INSERT INTO word_pairs (id, user_id, target_text, source_text, target_language, source_language) VALUES ($1, $2, $3, $4, $5)"
+impl Repository for WordPairRepository {
+    type Item = WordPair;
+    type Error = Error;
+
+    async fn insert(&self, word_pair: &WordPair) -> Result<WordPair, Error> {
+        let db_word_pair = sqlx::query_as!(
+            WordPair,
+            "INSERT INTO word_pairs (id, user_id, target_text, source_text, target_language, source_language) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *", 
+            &word_pair.id,
+            &word_pair.user_id,
+            &word_pair.target_text,
+            &word_pair.source_text,
+            &word_pair.target_language,
+            &word_pair.source_language
         )
-            .bind(word_pair.id)
-            .bind(word_pair.user_id)
-            .bind(word_pair.target_text)
-            .bind(word_pair.source_text)
-            .bind(word_pair.target_language)
-            .bind(word_pair.source_language)
-            .execute(&self.db)
+            .fetch_one(&self.db)
             .await?;
 
-        Ok(())
+        Ok(db_word_pair)
     }
+}
 
-    pub async fn select_word_pairs(&self, user_id: i32) -> Result<Vec<WordPair>, Error> {
-        let res = sqlx::query(
-            "SELECT id, target_text, source_text, target_language, source_language FROM word_pairs WHERE user_id = $1"
+impl IWordPairRepository for WordPairRepository {
+    async fn select_by_user_id(&self, user_id: &i32) -> Result<Vec<WordPair>, Error> {
+        let db_word_pairs = sqlx::query_as!(
+            WordPair,
+            "SELECT id, user_id, target_text, source_text, target_language, source_language FROM word_pairs WHERE user_id = $1",
+            &user_id
         )
-            .bind(user_id)
-            .map(|row: sqlx::postgres::PgRow| {
-                let word_pair = WordPair {
-                    id: row.get("id"),
-                    user_id: user_id,
-                    target_text: row.get("target_text"),
-                    source_text: row.get("source_text"),
-                    target_language: row.get("target_language"),
-                    source_language: row.get("source_language")
-                };
-                word_pair
-            })
             .fetch_all(&self.db)
             .await?;
 
-        Ok(res)
+        Ok(db_word_pairs)
     }
 }
