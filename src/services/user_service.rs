@@ -2,9 +2,10 @@ use thiserror::Error;
 
 use crate::{
     models::user::{CreateUser, User},
-    repositories::repository::Repository,
+    repositories::{repository::Repository, user_repository::IUserRepository},
 };
 
+#[derive(Clone)]
 pub struct UserService<T> {
     repo: T,
 }
@@ -32,14 +33,34 @@ where
     }
 }
 
+impl<T> UserService<T>
+where
+    T: IUserRepository,
+{
+    pub async fn get_by_id(&self, id: &i32) -> Result<User, UserServiceError> {
+        let res = self.repo.select_by_id(id).await?;
+
+        Ok(res)
+    }
+
+    pub async fn get_by_key(&self, key: &str) -> Result<User, UserServiceError> {
+        let res = self.repo.select_by_key(key).await?;
+
+        Ok(res)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
+
     use super::*;
 
     struct TestUserRepository {
         _db: i32,
     }
 
+    #[async_trait]
     impl Repository for TestUserRepository {
         type Item = User;
         type Error = sqlx::Error;

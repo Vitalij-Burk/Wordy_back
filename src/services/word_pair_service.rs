@@ -6,6 +6,7 @@ use crate::{
     translate::translate::translate_text,
 };
 
+#[derive(Clone)]
 pub struct WordPairService<T> {
     repo: T,
 }
@@ -69,12 +70,15 @@ where
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
+
     use super::*;
 
     struct TestWordPairRepository {
         _db: i32,
     }
 
+    #[async_trait]
     impl Repository for TestWordPairRepository {
         type Item = WordPair;
         type Error = sqlx::Error;
@@ -84,6 +88,7 @@ mod tests {
         }
     }
 
+    #[async_trait]
     impl IWordPairRepository for TestWordPairRepository {
         async fn select_by_user_id(&self, user_id: &i32) -> Result<Vec<Self::Item>, Self::Error> {
             Ok(vec![WordPair {
@@ -132,13 +137,13 @@ mod tests {
             .unwrap();
 
         let val = vec![WordPair {
-                id: 1234,
-                user_id: test_user_id,
-                target_text: "Hallo".to_string(),
-                source_text: "Hello".to_string(),
-                target_language: "de".to_string(),
-                source_language: "en".to_string(),
-            }];
+            id: 1234,
+            user_id: test_user_id,
+            target_text: "Hallo".to_string(),
+            source_text: "Hello".to_string(),
+            target_language: "de".to_string(),
+            source_language: "en".to_string(),
+        }];
 
         assert_eq!(res[0].user_id, val[0].user_id);
         assert_eq!(res[0].id, val[0].id);
