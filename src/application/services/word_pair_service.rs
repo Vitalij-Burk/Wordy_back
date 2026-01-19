@@ -1,30 +1,34 @@
+use heck::ToTitleCase;
 use thiserror::Error;
+use tracing::error;
 
-use crate::{
+use crate::domain::{
     models::word_pair::{CreateWordPair, WordPair},
-    repositories::{repository::Repository, word_pair_repository::IWordPairRepository},
-    translate::translate::translate_text,
+    traits::repositories::{repository::Repository, word_pair_repository::IWordPairRepository},
 };
 
 #[derive(Clone)]
-pub struct WordPairService<T> {
-    repo: T,
+pub struct WordPairService<Repo> {
+    repo: Repo,
 }
 
 #[derive(Debug, Error)]
 pub enum WordPairServiceError {
-    #[error("Database error")]
-    Database(#[from] sqlx::Error),
+    #[error("This word pair already exists: {0}")]
+    WordPairAlreadyExists(String),
 
-    #[error("Google Translate API error")]
-    GoogleTranslateAPI(#[from] translators::Error),
+    #[error("Word pair not found: `{0}`")]
+    NotFound(String),
+
+    #[error("Database error: `{0}`")]
+    Database(#[from] sqlx::Error),
 }
 
-impl<T> WordPairService<T>
+impl<Repo> WordPairService<Repo>
 where
-    T: Repository<Item = WordPair, Error = sqlx::Error>,
+    Repo: Repository<Item = WordPair, Error = sqlx::Error>,
 {
-    pub fn new(repo: T) -> Self {
+    pub fn new(repo: Repo) -> Self {
         Self { repo: repo }
     }
 
@@ -33,36 +37,39 @@ where
         user_id: &i32,
         params: &CreateWordPair,
     ) -> Result<WordPair, WordPairServiceError> {
-        let target_text = translate_text(
-            &params.source_text,
-            &params.source_language,
-            &params.target_language,
-        )
-        .await?;
-
         let word_pair = WordPair::new(
             &user_id,
-            &target_text,
+            &params.target_language.to_title_case(),
             &params.source_text,
             &params.target_language,
             &params.source_language,
         );
 
-        let res = self.repo.insert(&word_pair).await?;
+        let res = self.repo.insert(&word_pair).await.map_err(|error| {
+            error!("WordPair DB error: {}", error);
+            error
+        })?;
 
         Ok(res)
     }
 }
 
-impl<T> WordPairService<T>
+impl<Repo> WordPairService<Repo>
 where
-    T: IWordPairRepository,
+    Repo: IWordPairRepository<Error = sqlx::Error>,
 {
     pub async fn get_by_user_id(
         &self,
         user_id: &i32,
     ) -> Result<Vec<WordPair>, WordPairServiceError> {
-        let res = self.repo.select_by_user_id(&user_id).await?;
+        let res = self
+            .repo
+            .select_by_user_id(&user_id)
+            .await
+            .map_err(|error| {
+                error!("WordPair DB error: {}", error);
+                error
+            })?;
 
         Ok(res)
     }
@@ -80,8 +87,13 @@ mod tests {
 
     #[async_trait]
     impl Repository for TestWordPairRepository {
+        type Pool = i32;
         type Item = WordPair;
         type Error = sqlx::Error;
+
+        fn new(db: i32) -> Self {
+            Self { _db: db }
+        }
 
         async fn insert(&self, item: &Self::Item) -> Result<Self::Item, Self::Error> {
             Ok(item.clone())
@@ -109,6 +121,7 @@ mod tests {
         let word_pair_service = WordPairService::new(repo);
 
         let test_params = CreateWordPair {
+            target_text: "Hallo".to_string(),
             source_text: "Hello".to_string(),
             target_language: "de".to_string(),
             source_language: "en".to_string(),
@@ -121,6 +134,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(res.user_id, test_user_id);
+    }
+
+    #[tokio::test]
+    async fn test_format() {
+        let repo = TestWordPairRepository { _db: 12345 };
+
+        let word_pair_service = WordPairService::new(repo);
+
+        let test_params = CreateWordPair {
+            target_text: "Hallo".to_string(),
+            source_text: "Hello".to_string(),
+            target_language: "de".to_string(),
+            source_language: "en".to_string(),
+        };
+        let test_user_id = 1234567;
+
+        let res = word_pair_service
+            .create(&test_user_id, &test_params)
+            .await
+            .unwrap();
+
+        assert_eq!(res.source_text, "Hello");
+        assert_eq!(res.target_text, "Hallo".to_string());
     }
 
     #[tokio::test]

@@ -1,21 +1,24 @@
-use crate::{models::word_pair::WordPair, repositories::repository::Repository};
+use crate::domain::{
+    models::word_pair::WordPair,
+    traits::repositories::{repository::Repository, word_pair_repository::IWordPairRepository},
+};
 use async_trait::async_trait;
 use sqlx::{Error, postgres::PgPool};
 
-#[async_trait]
-pub trait IWordPairRepository: Repository<Item = WordPair, Error = Error> {
-    async fn select_by_user_id(&self, user_id: &i32) -> Result<Vec<Self::Item>, Self::Error>;
-}
-
 #[derive(Clone)]
-pub struct WordPairRepository {
-    pub db: PgPool,
+pub struct WordPairPostgresRepository {
+    db: PgPool,
 }
 
 #[async_trait]
-impl Repository for WordPairRepository {
+impl Repository for WordPairPostgresRepository {
+    type Pool = PgPool;
     type Item = WordPair;
     type Error = Error;
+
+    fn new(db: PgPool) -> Self {
+        Self { db: db }
+    }
 
     async fn insert(&self, word_pair: &WordPair) -> Result<WordPair, Error> {
         let db_word_pair = sqlx::query_as!(
@@ -36,7 +39,7 @@ impl Repository for WordPairRepository {
 }
 
 #[async_trait]
-impl IWordPairRepository for WordPairRepository {
+impl IWordPairRepository for WordPairPostgresRepository {
     async fn select_by_user_id(&self, user_id: &i32) -> Result<Vec<WordPair>, Error> {
         let db_word_pairs = sqlx::query_as!(
             WordPair,

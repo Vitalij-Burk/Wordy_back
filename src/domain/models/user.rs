@@ -1,3 +1,4 @@
+use heck::ToTitleCase;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +14,6 @@ pub struct User {
 
     pub key: String,
     pub name: String,
-    //word_pairs: HashSet<WordPair>,
 }
 
 impl User {
@@ -23,7 +23,7 @@ impl User {
         Self {
             id: id,
             key: key.to_string(),
-            name: name.to_string(),
+            name: name.to_string().to_title_case(),
         }
     }
 }

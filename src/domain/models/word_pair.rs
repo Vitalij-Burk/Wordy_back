@@ -1,8 +1,10 @@
+use heck::ToTitleCase;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CreateWordPair {
+    pub target_text: String,
     pub source_text: String,
     pub target_language: String,
     pub source_language: String,
@@ -32,10 +34,10 @@ impl WordPair {
         Self {
             id: id,
             user_id: *user_id,
-            target_text: target_text.to_string(),
-            source_text: source_text.to_string(),
-            target_language: target_language.to_string(),
-            source_language: source_language.to_string(),
+            target_text: target_text.to_string().to_title_case(),
+            source_text: source_text.to_string().to_title_case(),
+            target_language: target_language.to_string().to_lowercase(),
+            source_language: source_language.to_string().to_lowercase(),
         }
     }
 }
