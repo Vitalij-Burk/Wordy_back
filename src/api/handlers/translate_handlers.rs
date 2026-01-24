@@ -6,14 +6,14 @@ use reqwest::StatusCode;
 
 use crate::{
     AppState,
-    api::handlers::types::HandlerError,
+    api::{
+        handlers::types::HandlerError,
+        models::word_pair::{CreateWordPairDTO, WordPairDTO},
+    },
     application::services::{
         translate_service::TranslateServiceError, word_pair_service::WordPairServiceError,
     },
-    domain::models::{
-        translate::ToTranslate,
-        word_pair::{CreateWordPair, WordPair},
-    },
+    domain::models::translate::ToTranslate,
 };
 
 #[axum::debug_handler]
@@ -21,7 +21,7 @@ async fn translate(
     State(state): State<AppState>,
     Path(user_id): Path<i32>,
     Json(payload): Json<ToTranslate>,
-) -> Result<Json<WordPair>, HandlerError> {
+) -> Result<Json<WordPairDTO>, HandlerError> {
     let target_text = state
         .translate_service
         .translate_text(
@@ -44,7 +44,7 @@ async fn translate(
         .word_pair_service
         .create(
             &user_id,
-            &CreateWordPair {
+            &CreateWordPairDTO {
                 target_text: target_text,
                 source_text: payload.source_text,
                 target_language: payload.target_language,
@@ -62,5 +62,7 @@ async fn translate(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Unknown error"),
         })?;
 
-    Ok(Json(res))
+    let dto = WordPairDTO::from(res);
+
+    Ok(Json(dto))
 }

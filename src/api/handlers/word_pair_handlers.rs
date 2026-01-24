@@ -4,8 +4,10 @@ use axum::{
     http::StatusCode,
 };
 
-use crate::api::handlers::types::HandlerError;
-use crate::domain::models::word_pair::{CreateWordPair, WordPair};
+use crate::api::{
+    handlers::types::HandlerError,
+    models::word_pair::{CreateWordPairDTO, GetWordPairDTO, WordPairDTO},
+};
 use crate::{
     AppState,
     application::services::{
@@ -17,11 +19,11 @@ use crate::{
 pub async fn add_word_pair_by_user_id(
     State(state): State<AppState>,
     Path(user_id): Path<i32>,
-    Json(payload): Json<CreateWordPair>,
-) -> Result<Json<WordPair>, HandlerError> {
-    let word_pair = state
+    Json(dto): Json<CreateWordPairDTO>,
+) -> Result<Json<WordPairDTO>, HandlerError> {
+    let res = state
         .word_pair_service
-        .create(&user_id, &payload)
+        .create(&user_id, &dto)
         .await
         .map_err(|error| match error {
             WordPairServiceError::Database(_) => {
@@ -33,15 +35,22 @@ pub async fn add_word_pair_by_user_id(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Unknown error"),
         })?;
 
-    Ok(Json(word_pair))
+    Ok(Json(WordPairDTO {
+        id: res.id,
+        user_id: res.user_id,
+        target_text: res.target_text,
+        source_text: res.source_text,
+        target_language: res.target_language,
+        source_language: res.source_language,
+    }))
 }
 
 #[axum::debug_handler]
 pub async fn add_word_pair_by_user_key(
     State(state): State<AppState>,
     Path(key): Path<String>,
-    Json(payload): Json<CreateWordPair>,
-) -> Result<Json<WordPair>, HandlerError> {
+    Json(dto): Json<CreateWordPairDTO>,
+) -> Result<Json<WordPairDTO>, HandlerError> {
     let user = state
         .user_service
         .get_by_key(&key)
@@ -54,9 +63,9 @@ pub async fn add_word_pair_by_user_key(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Unknown error"),
         })?;
 
-    let word_pair = state
+    let res = state
         .word_pair_service
-        .create(&user.id, &payload)
+        .create(&user.id, &dto)
         .await
         .map_err(|error| match error {
             WordPairServiceError::Database(_) => {
@@ -68,17 +77,19 @@ pub async fn add_word_pair_by_user_key(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Unknown error"),
         })?;
 
-    Ok(Json(word_pair))
+    let dto = WordPairDTO::from(res);
+
+    Ok(Json(dto))
 }
 
 #[axum::debug_handler]
 pub async fn get_word_pairs_by_user_id(
     State(state): State<AppState>,
     Path(user_id): Path<i32>,
-) -> Result<Json<Vec<WordPair>>, HandlerError> {
+) -> Result<Json<Vec<WordPairDTO>>, HandlerError> {
     let res = state
         .word_pair_service
-        .get_by_user_id(&user_id)
+        .get(GetWordPairDTO::ByUserId { user_id: user_id })
         .await
         .map_err(|error| match error {
             WordPairServiceError::Database(_) => {
@@ -88,14 +99,20 @@ pub async fn get_word_pairs_by_user_id(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Unknown error"),
         })?;
 
-    Ok(Json(res))
+    let mut dtos: Vec<WordPairDTO> = vec![];
+
+    for res_item in res.into_iter() {
+        dtos.push(WordPairDTO::from(res_item))
+    }
+
+    Ok(Json(dtos))
 }
 
 #[axum::debug_handler]
 pub async fn get_word_pairs_by_user_key(
     State(state): State<AppState>,
     Path(key): Path<String>,
-) -> Result<Json<Vec<WordPair>>, HandlerError> {
+) -> Result<Json<Vec<WordPairDTO>>, HandlerError> {
     let user = state
         .user_service
         .get_by_key(&key)
@@ -110,7 +127,7 @@ pub async fn get_word_pairs_by_user_key(
 
     let res = state
         .word_pair_service
-        .get_by_user_id(&user.id)
+        .get(GetWordPairDTO::ByUserId { user_id: user.id })
         .await
         .map_err(|error| match error {
             WordPairServiceError::Database(_) => {
@@ -120,5 +137,11 @@ pub async fn get_word_pairs_by_user_key(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Unknown error"),
         })?;
 
-    Ok(Json(res))
+    let mut dtos: Vec<WordPairDTO> = vec![];
+
+    for res_item in res.into_iter() {
+        dtos.push(WordPairDTO::from(res_item))
+    }
+
+    Ok(Json(dtos))
 }

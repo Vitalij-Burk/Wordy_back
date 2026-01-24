@@ -3,9 +3,13 @@ use std::borrow::Cow;
 use thiserror::Error;
 use tracing::error;
 
-use crate::domain::{
-    models::user::{CreateUser, User},
-    traits::repositories::{repository::Repository, user_repository::IUserRepository},
+use crate::{
+    api::models::user::CreateUserDTO,
+    domain::{
+        models::user::User,
+        traits::repositories::{repository::Repository, user_repository::IUserRepository},
+    },
+    infrastructure::storage::database::models::user::UserEntity,
 };
 
 #[derive(Clone)]
@@ -33,30 +37,33 @@ pub enum UserServiceError {
 
 impl<Repo> UserService<Repo>
 where
-    Repo: Repository<Item = User, Error = sqlx::Error>,
+    Repo: Repository<Item = UserEntity, Error = sqlx::Error>,
 {
     pub fn new(repo: Repo) -> Self {
         Self { repo: repo }
     }
 
-    pub async fn create(&self, params: &CreateUser) -> Result<User, UserServiceError> {
+    pub async fn create(&self, params: &CreateUserDTO) -> Result<User, UserServiceError> {
         let user = User::new(&params.key, &params.name);
 
-        let res = self
-            .repo
-            .insert(&user)
-            .await
-            .map_err(|error| match &error {
-                sqlx::Error::Database(error) if error.code() == Some(Cow::Borrowed("23505")) => {
-                    UserServiceError::KeyAlreadyExists(params.key.clone())
-                }
-                _ => {
-                    error!("User DB error: {:?}", error);
-                    UserServiceError::Database(error.into())
-                }
-            })?;
+        let res =
+            self.repo
+                .insert(&UserEntity::from(user))
+                .await
+                .map_err(|error| match &error {
+                    sqlx::Error::Database(error)
+                        if error.code() == Some(Cow::Borrowed("23505")) =>
+                    {
+                        UserServiceError::KeyAlreadyExists(params.key.clone())
+                    }
+                    _ => {
+                        error!("User DB error: {:?}", error);
+                        UserServiceError::Database(error.into())
+                    }
+                })?;
+        let user = User::from(res);
 
-        Ok(res)
+        Ok(user)
     }
 }
 
@@ -69,8 +76,9 @@ where
             error!("User DB error: {}", error);
             error
         })?;
+        let user = User::from(res);
 
-        Ok(res)
+        Ok(user)
     }
 
     pub async fn get_by_key(&self, key: &str) -> Result<User, UserServiceError> {
@@ -78,8 +86,9 @@ where
             error!("User DB error: {}", error);
             error
         })?;
+        let user = User::from(res);
 
-        Ok(res)
+        Ok(user)
     }
 }
 
@@ -96,7 +105,7 @@ mod tests {
     #[async_trait]
     impl Repository for TestUserRepository {
         type Pool = i32;
-        type Item = User;
+        type Item = UserEntity;
         type Error = sqlx::Error;
 
         fn new(db: i32) -> Self {
@@ -114,7 +123,7 @@ mod tests {
 
         let user_service = UserService::new(repo);
 
-        let test_user = CreateUser {
+        let test_user = CreateUserDTO {
             key: "fsdfsf".to_string(),
             name: "Me".to_string(),
         };

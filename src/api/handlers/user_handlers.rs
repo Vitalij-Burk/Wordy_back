@@ -2,17 +2,17 @@ use axum::{Json, extract::State, http::StatusCode};
 
 use crate::AppState;
 use crate::api::handlers::types::HandlerError;
+use crate::api::models::user::{CreateUserDTO, UserDTO};
 use crate::application::services::user_service::UserServiceError;
-use crate::domain::models::user::{CreateUser, User};
 
 #[axum::debug_handler]
 pub async fn make_user(
     State(state): State<AppState>,
-    Json(payload): Json<CreateUser>,
-) -> Result<Json<User>, HandlerError> {
+    Json(dto): Json<CreateUserDTO>,
+) -> Result<Json<UserDTO>, HandlerError> {
     let res = state
         .user_service
-        .create(&payload)
+        .create(&dto)
         .await
         .map_err(|error| match error {
             UserServiceError::Database(_) => {
@@ -28,5 +28,9 @@ pub async fn make_user(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, "Unknown error"),
         })?;
 
-    Ok(Json(res))
+    Ok(Json(UserDTO {
+        id: res.id,
+        key: res.key,
+        name: res.name,
+    }))
 }

@@ -2,9 +2,13 @@ use heck::ToTitleCase;
 use thiserror::Error;
 use tracing::error;
 
-use crate::domain::{
-    models::word_pair::{CreateWordPair, WordPair},
-    traits::repositories::{repository::Repository, word_pair_repository::IWordPairRepository},
+use crate::{
+    api::models::word_pair::{CreateWordPairDTO, GetWordPairDTO},
+    domain::{
+        models::word_pair::WordPair,
+        traits::repositories::{repository::Repository, word_pair_repository::IWordPairRepository},
+    },
+    infrastructure::storage::database::models::word_pair::WordPairEntity,
 };
 
 #[derive(Clone)]
@@ -22,11 +26,14 @@ pub enum WordPairServiceError {
 
     #[error("Database error: `{0}`")]
     Database(#[from] sqlx::Error),
+
+    #[error("Unknown error")]
+    Unknown,
 }
 
 impl<Repo> WordPairService<Repo>
 where
-    Repo: Repository<Item = WordPair, Error = sqlx::Error>,
+    Repo: Repository<Item = WordPairEntity, Error = sqlx::Error>,
 {
     pub fn new(repo: Repo) -> Self {
         Self { repo: repo }
@@ -35,7 +42,7 @@ where
     pub async fn create(
         &self,
         user_id: &i32,
-        params: &CreateWordPair,
+        params: &CreateWordPairDTO,
     ) -> Result<WordPair, WordPairServiceError> {
         let word_pair = WordPair::new(
             &user_id,
@@ -45,12 +52,18 @@ where
             &params.source_language,
         );
 
-        let res = self.repo.insert(&word_pair).await.map_err(|error| {
-            error!("WordPair DB error: {}", error);
-            error
-        })?;
+        let res = self
+            .repo
+            .insert(&WordPairEntity::from(word_pair))
+            .await
+            .map_err(|error| {
+                error!("WordPair DB error: {}", error);
+                error
+            })?;
 
-        Ok(res)
+        let word_pair = WordPair::from(res);
+
+        Ok(word_pair)
     }
 }
 
@@ -58,26 +71,35 @@ impl<Repo> WordPairService<Repo>
 where
     Repo: IWordPairRepository<Error = sqlx::Error>,
 {
-    pub async fn get_by_user_id(
-        &self,
-        user_id: &i32,
-    ) -> Result<Vec<WordPair>, WordPairServiceError> {
-        let res = self
-            .repo
-            .select_by_user_id(&user_id)
-            .await
-            .map_err(|error| {
-                error!("WordPair DB error: {}", error);
-                error
-            })?;
+    pub async fn get(&self, params: GetWordPairDTO) -> Result<Vec<WordPair>, WordPairServiceError> {
+        match params {
+            GetWordPairDTO::ByUserId { user_id } => {
+                let res = self
+                    .repo
+                    .select_by_user_id(&user_id)
+                    .await
+                    .map_err(|error| {
+                        error!("WordPair DB error: {}", error);
+                        error
+                    })?;
+                let mut word_pairs: Vec<WordPair> = vec![];
 
-        Ok(res)
+                for res_item in res.into_iter() {
+                    word_pairs.push(WordPair::from(res_item))
+                }
+
+                Ok(word_pairs)
+            }
+            GetWordPairDTO::ById { id } => Err(WordPairServiceError::Unknown),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
+
+    use crate::infrastructure::storage::database::models::word_pair::WordPairEntity;
 
     use super::*;
 
@@ -88,7 +110,7 @@ mod tests {
     #[async_trait]
     impl Repository for TestWordPairRepository {
         type Pool = i32;
-        type Item = WordPair;
+        type Item = WordPairEntity;
         type Error = sqlx::Error;
 
         fn new(db: i32) -> Self {
@@ -103,7 +125,7 @@ mod tests {
     #[async_trait]
     impl IWordPairRepository for TestWordPairRepository {
         async fn select_by_user_id(&self, user_id: &i32) -> Result<Vec<Self::Item>, Self::Error> {
-            Ok(vec![WordPair {
+            Ok(vec![WordPairEntity {
                 id: 1234,
                 user_id: *user_id,
                 target_text: "Hallo".to_string(),
@@ -120,13 +142,13 @@ mod tests {
 
         let word_pair_service = WordPairService::new(repo);
 
-        let test_params = CreateWordPair {
+        let test_user_id = 1234567;
+        let test_params = CreateWordPairDTO {
             target_text: "Hallo".to_string(),
             source_text: "Hello".to_string(),
             target_language: "de".to_string(),
             source_language: "en".to_string(),
         };
-        let test_user_id = 1234567;
 
         let res = word_pair_service
             .create(&test_user_id, &test_params)
@@ -142,13 +164,13 @@ mod tests {
 
         let word_pair_service = WordPairService::new(repo);
 
-        let test_params = CreateWordPair {
+        let test_user_id = 1234567;
+        let test_params = CreateWordPairDTO {
             target_text: "Hallo".to_string(),
             source_text: "Hello".to_string(),
             target_language: "de".to_string(),
             source_language: "en".to_string(),
         };
-        let test_user_id = 1234567;
 
         let res = word_pair_service
             .create(&test_user_id, &test_params)
@@ -168,7 +190,9 @@ mod tests {
         let test_user_id = 1234567;
 
         let res = word_pair_service
-            .get_by_user_id(&test_user_id)
+            .get(GetWordPairDTO::ByUserId {
+                user_id: test_user_id,
+            })
             .await
             .unwrap();
 
