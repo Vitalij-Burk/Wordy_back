@@ -1,9 +1,13 @@
 use axum::{Json, extract::State, http::StatusCode};
 
-use crate::AppState;
-use crate::api::handlers::types::HandlerError;
-use crate::api::models::user::{CreateUserDTO, UserDTO};
-use crate::application::services::user_service::UserServiceError;
+use crate::{
+    AppState,
+    api::{
+        models::user::{CreateUserDTO, UserDTO},
+        types::HandlerError,
+    },
+    application::services::user_service::UserServiceError,
+};
 
 #[axum::debug_handler]
 pub async fn make_user(

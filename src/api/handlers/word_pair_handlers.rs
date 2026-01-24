@@ -5,8 +5,8 @@ use axum::{
 };
 
 use crate::api::{
-    handlers::types::HandlerError,
     models::word_pair::{CreateWordPairDTO, GetWordPairDTO, WordPairDTO},
+    types::HandlerError,
 };
 use crate::{
     AppState,
